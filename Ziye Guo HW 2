@@ -1,0 +1,1083 @@
+# Chapter 7:
+
+# Question 1:
+force(pigs)
+head(pigs)
+dim(pigs)
+# Part a: Optimal parameters and forecasts for next 4 months:
+pig.fc <- ses(pigs, h=4)
+pig.fc
+plot(pig.fc)
+summary(pig.fc)
+# Optimal alpha = 0.2971, optimal l = 77260.0561.
+
+# Part b: 95% prediction interval for first forecast:
+# Lower bound of prediction interval:
+pig.fc1 <- ses(pigs, h=1)
+pig.fc1$mean-1.96*sd(pig.fc$residuals)
+# Upper bound of prediction interval:
+pig.fc1$mean+1.96*sd(pig.fc$residuals)
+# Prediction interval by R:
+ses(pigs, h=1)
+# My prediction interval is (78679.97, 118952.8), and R gives (78611.97, 119020.8).
+# My interval is tighter than R's interval. 
+
+
+# Question 2: Write my own simple exponential smoothing function:
+my.ses <- function(y, alpha, l0){
+  for(index in 1:length(y)){
+    yhat <- lt
+    lt <- alpha*y[index] + (1 - alpha)*l[index-1] 
+  }
+  return(yhat)
+}
+
+# Question 3: Write a function for SSE:
+my.ses1 <- function(y, alpha, l0){
+  for(index in 1:length(y)){
+    yhat <- l0
+    yhat <- alpha*y[index] + (1 - alpha)*yhat
+    error <- y[index] - yhat
+    SSE <- SSE+error^2
+  }
+  return(SSE)
+}
+
+# Question 4: Combine the two functions above:
+SES <- function(init_pars, data){
+
+  fc_next <- 0
+  
+  SSE <- function(pars, data){
+    error <- 0
+    SSE <- 0
+    alpha <- pars[1]
+    l0 <- pars[2]
+    y_hat <- l0
+    
+    for(index in 1:length(data)){
+      error <- data[index] - y_hat
+      SSE <- SSE + error^2
+      
+      y_hat <- alpha*data[index] + (1 - alpha)*y_hat 
+    }
+    fc_next <<- y_hat
+    return(SSE)
+  }
+  
+  optim_pars <- optim(par = init_pars, data = data, fn = SSE)
+  
+  return(list(
+    Next_observation_forecast = fc_next,
+    alpha = optim_pars$par[1],
+    l0 = optim_pars$par[2]
+  ))
+}
+
+# Question 5: 
+force(books)
+head(books)
+# Part a: Plot data:
+autoplot(books)
+# comment: both series have obvious positive trends and similar variation of the books sales over the years. 
+# Hardover book sales are usually higher than paperback since day 10. 
+
+# Part b: SES forecast:
+paperback.fc <- ses(books[, "Paperback"], h=4)
+paperback.fc
+autoplot(paperback.fc)
+hardcover.fc <- ses(books[, "Hardcover"], h=4)
+hardcover.fc
+autoplot(hardcover.fc)
+# Part c: Error measures:
+sqrt(mean(paperback.fc$residuals^2))
+sqrt(mean(hardcover.fc$residuals^2))
+
+
+# Question 6: Holt's linear model:
+# Part a: Forecast:
+hardcover.holt.fc <- holt(books[, "Hardcover"], h=4)
+hardcover.holt.fc 
+paperback.holt.fc <- holt(books[, "Paperback"], h=4)
+paperback.holt.fc
+
+# Part b: Error Comparison:
+sqrt(mean(paperback.holt.fc$residuals^2))
+sqrt(mean(hardcover.holt.fc$residuals^2))
+# The RMSE from holt's linear method are 31.13692 and 27.19358, compared to SES's RMSEs 33.63769 and 31.93101. 
+# So, Holt's linear method has a smaller error since Holt’s method is using one more parameter than SES. 
+
+# Part c: Holt's method is better than SES because the forecasts have less error. 
+
+# Part d: Prediction interval from SES and Holt's method.
+# Holt's method:
+paperback.holt.fc$upper[1, "95%"]
+paperback.holt.fc$lower[1, "95%"]
+paperback.fc$upper[1, "95%"]
+paperback.fc$lower[1, "95%"]
+# For paperback, Holt's method has PI (143.913, 276.2715), and SES has PI (138.867, 275.3523).
+
+# SES method:
+hardcover.holt.fc$upper[1, "95%"]
+hardcover.holt.fc$lower[1, "95%"]
+hardcover.fc$upper[1, "95%"]
+hardcover.fc$lower[1, "95%"]
+# For hardcover, Holt's method has PI (192.9222, 307.4256), and SES has PI (174.7799, 304.3403).
+
+
+# Question 7: Experiment with Holt's method:
+force(eggs)
+head(eggs)
+# Damped trend:
+egg.damped.fc <- holt(eggs, damped = TRUE, h=100)
+egg.damped.fc
+autoplot(egg.damped.fc)
+# Box-Cox:
+egg.Box.fc <- holt(eggs, lambda = BoxCox.lambda(eggs), h=100)
+egg.Box.fc
+autoplot(egg.Box.fc)
+# Damped with Box-Cox:
+egg.Box.damped.fc <- holt(eggs, damped = TRUE, lambda = BoxCox.lambda(eggs), h=100)
+autoplot(egg.Box.damped.fc)
+# Damped RMSE:
+sqrt(mean(egg.damped.fc$residuals^2))
+sqrt(mean(egg.Box.fc$residuals^2))
+sqrt(mean(egg.Box.damped.fc$residuals^2))
+# The holt's method with Box-Cox transformation of eggs data provides the best error, so it's the best model. 
+
+
+# Question 8: Retail data:
+force(retail)
+head(retail)
+# Part a: Multiplicative Seasonality:
+retaildata <- readxl::read_excel("~/Desktop/retail.xlsx", skip=1)
+myts <- ts(retaildata[,"A3349873A"], frequency=12, start=c(1982,4))
+autoplot(myts)
+# The multiplicative decompostion is useful when the seasonal variation increases over time.
+# In the plot we can see that seasonality of sales changes over time. 
+
+# Part b: Holt-Winters’ multiplicative method & Damped trend:
+fit1 <- hw(myts, seasonal = "multiplicative")
+fit2 <- hw(myts, seasonal = "multiplicative", damped = TRUE)
+
+# Part c: Compare RMSE:
+sqrt(mean(fit1$residuals^2))
+sqrt(mean(fit2$residuals^2))
+# The RMSE from model 2 without damped trend has less error. 
+
+# Part d: Residuals:
+checkresiduals(fit1)
+# The residual plot looks like white noise because ACF decreases to pretty quickly at each time lag. Residuals have normal distribution. 
+
+# Part e: Forecast to 2010:
+train <- window(myts, end=c(2010, 12))
+test <- window(myts, start=2011)
+fit3 <- hw(train, seasonal = "multiplicative", h=36)
+fc1 <- forecast(fit3, test)
+autoplot(fit3)
+summary(fit3)
+summary(fc1)
+# RMSE is 9.107 from Holt-Winters’ multiplicative method for forecast to 2010.
+
+
+# Question 9: STL decomposition + Box-Cox transformation + ETS with seasonally adjusted data:
+retail.fc <- stlm(train, s.window = 13, robust = TRUE, method = "ets", lambda = BoxCox.lambda(train), h=36)
+accuracy(retail.fc, test)
+# New model has RMSE of 8.05701, which is better than the Holt-Winters’ multiplicative method.
+
+
+# Question 10: 
+force(ukcars)
+head(ukcars)
+# Question a: Plot data
+autoplot(ukcars)
+# The series has a positive trend and quartly seasonality. It seems like every 20 years there is a huge fall in the car sales. 
+# Question b: STL decomposition:
+ukcar.stl <- stl(ukcars, s.window = 4, robust = TRUE)
+ukcar.adj <- seasadj(ukcar.stl)
+autoplot(ukcar.adj)
+# Question c: Forecast next 2 years with STLF:
+ukcar.fc <- stlf(ukcar.adj, h=8, damped = TRUE, etsmodel="AAN")
+autoplot(ukcar.fc)
+# Question d: Forecast with Holt's method:
+ukcar.holt <- holt(ukcar.adj, h=8, damped = FALSE)
+autoplot(ukcar.holt)
+# Question e: Forecast with ETS:
+ukcar.ets <- ets(ukcar.adj)
+summary(ukcar.ets)
+# ETS model selected ANN for the series.
+
+# Part f: Compare Error:
+sqrt(mean(ukcar.ets$residuals^2))
+sqrt(mean(ukcar.fc$residuals^2))
+# RMSE of ETS model is 22.06 and RMSE of STL model is 21.29.
+# STLF model is a better fit for this data.
+
+# Part g: Compare three models:
+summary(ukcar.fc)
+summary(ukcar.holt)
+summary(ukcar.ets)
+# ACI, AICc, BIC from stlf are 1237.426, 1238.219, 1253.790 . ACI, AICc, BIC from ETS are 1239.394, 1239.614, 1247.576. Error for Holt is 1244.052 1244.613 1257.689.
+# STLF model is a better fit for this data.
+
+# Part h: Residuals:
+checkresiduals(ukcar.fc)
+# The residuals from STL looks like the white noise and ACF decreases to 0 pretty quickly and error distribution is normal. 
+
+
+# Question 11: 
+force(visitors)
+head(visitors)
+# Part a: Plot data:
+autoplot(visitors)
+# The series has positive trend and its seasonality increases with time. 
+
+# Part b: Train and Test set:
+visitor.train <- window(visitors, end=c(2003, 3))
+visitor.test <- window(visitors, start = c(2003, 4))
+visit.fit <- hw(visitor.train, method = "Multiplicative")
+visit.fc <- forecast(visit.fit, visitor.test)
+# Part c: Multiplicative is necessary because variance in visitor numbers increases with time. 
+
+# Part d: Forecast for next 2 years with different models:
+# ETS:
+visit.ets <- ets(visitor.train)
+ets.fc <- forecast(visit.ets, h=24)
+autoplot(ets.fc)
+# Additive ETS with Box-Cox transformation:
+visit.add.ets <- ets(visitor.train, lambda = BoxCox.lambda(visitor.train), additive.only = TRUE)
+add.ets.fc <- forecast(visit.add.ets, h=24)
+autoplot(add.ets.fc)
+# Seasonal Naive:
+naive.fc <- snaive(visitor.train, h=24)
+autoplot(naive.fc)
+# STL ETS with Box transformation:
+stl.ets <- stlm(visitor.train, lambda =BoxCox.lambda(visitor.train), method = "ets")
+stl.ets.fc <- forecast(stl.ets, h=24)
+autoplot(stl.ets.fc)
+
+# Part e: Evaluate models:
+accuracy(visit.fc, visitor.test)
+accuracy(ets.fc , visitor.test)
+accuracy(add.ets.fc, visitor.test)
+accuracy(naive.fc, visitor.test)
+accuracy(stl.ets.fc, visitor.test)
+# Comparing all model's error measures, the last model--"STL decomposition applied to the Box-Cox transformed data followed by an ETS model applied to seasonally adjusted data" is the best. 
+# This model has the least training set error and test set error among all models.
+
+# Residuals:
+checkresiduals(stl.ets.fc)
+# STL + ETS(M, A, N) with BoxCox transformation model passes the residual test, since ACF decreases to 0 quickly at each time lag. Residual plots look like white noise and has normal distribution.
+
+# Part f: Cross-Validation:
+e1 <- tsCV(visitor.train, hw, h=24)
+f.ets <- function(x, h){
+  forecast(ets(x), h = h)
+}
+e2 <- tsCV(visitor.train, f.ets, h=24)
+add.ets <- function(x, h){
+  forecast(ets(x, lambda = BoxCox.lambda(x), additive.only = TRUE), h = h)
+}
+e3 <- tsCV(visitor.train, add.ets, h=24)
+e4 <- tsCV(visitor.train, snaive, h=24)
+fets_stl <- function(x, h){
+  stlf(x, h, t.window = 13, s.window = "periodic", robust = TRUE, method = "ets", lambda = BoxCox.lambda(x))
+}
+e5 <- tsCV(visitor.train, stl.ets.fc, h=24)
+mean(e1^2, na.rm=TRUE)
+mean(e2^2, na.rm=TRUE)
+mean(e3^2, na.rm=TRUE)
+mean(e4^2, na.rm=TRUE)
+mean(e5^2, na.rm=TRUE)
+# Comparing 5 model's MES, ETS model is the best because of least error. 
+
+
+# Question 12: 
+force(qcement)
+head(qcement)
+# Part a: Forecast with Nairve and ETS models:
+fets <- function(y, h) { 
+  forecast(ets(y), h = h)
+}
+e1 <- tsCV(qcement, fets, h=4)
+e2 <- tsCV(qcement, snaive, h=4)
+# Part b: Compare MSE:
+mean(e1^2, na.rm=TRUE)
+mean(e2^2, na.rm=TRUE)
+# Comparing MSE error for the two models, ETS models provides a more accurate forecast. 
+
+
+# Question 13: 
+force(ausbeer)
+head(ausbeer)
+force(bricksq)
+head(bricksq)
+force(dole)
+head(dole)
+force(a10)
+head(a10)
+force(h02)
+head(h02)
+force(usmelec)
+head(usmelec)
+# Ausbeer Data:
+ausbeer.train <- subset(ausbeer, end = length(ausbeer)-12)
+ausbeer.test <- subset(ausbeer, start = length(ausbeer)-11)
+fc.ets <- forecast(ets(ausbeer.train), h=12)
+accuracy(fc.ets, ausbeer.test)
+
+snaive_ausbeer_train <- snaive(ausbeer.train,  h = 12)
+accuracy(snaive_ausbeer_train, ausbeer.test)
+
+fc.stl <- stlf(ausbeer.train, lambda = BoxCox.lambda(ausbeer.train), s.window = 5, h=12, robust = TRUE)
+accuracy(fc.stl, ausbeer.test)
+# stlf with Box-Cox transformation has the best forecast both for the trainning data and test data set for ausbeer data.
+
+# Bricksq Data:
+bricksq.train <- subset(bricksq, end = length(bricksq)-12)
+bricksq.test <- subset(bricksq, start = length(bricksq)-11)
+fc.ets <- forecast(ets(bricksq.train), h=12)
+accuracy(fc.ets, bricksq.test)
+
+snaive_bricksq_train <- snaive(bricksq.train,  h = 12)
+accuracy(snaive_bricksq_train, bricksq.test)
+
+fc.stl <- stlf(bricksq.train, lambda = BoxCox.lambda(bricksq.train), s.window = 5, h=12, robust = TRUE)
+accuracy(fc.stl, bricksq.test)
+# stlf with Box-Cox transformation has the best forecast both for the trainning data and test data set for bricksq data.
+
+# dole Data:
+dole.train <- subset(dole, end = length(dole)-36)
+dole.test <- subset(dole, start = length(dole)-35)
+fc.ets <- forecast(ets(dole.train), h=12)
+accuracy(fc.ets, dole.test)
+
+snaive_dole_train <- snaive(dole.train,  h = 12)
+accuracy(snaive_dole_train, dole.test)
+
+fc.stl <- stlf(dole.train, lambda = BoxCox.lambda(dole.train), s.window = 5, h=12, robust = TRUE)
+accuracy(fc.stl, dole.test)
+# ETS model has the best forecast both for the trainning data and test data set for dole data.
+
+# a10 Data:
+a10.train <- subset(a10, end = length(a10)-36)
+a10.test <- subset(a10, start = length(a10)-35)
+fc.ets <- forecast(ets(a10.train), h=12)
+accuracy(fc.ets, a10.test)
+
+snaive_a10_train <- snaive(a10.train,  h = 12)
+accuracy(snaive_a10_train, a10.test)
+
+fc.stl <- stlf(a10.train, lambda = BoxCox.lambda(a10.train), s.window = 5, h=12, robust = TRUE)
+accuracy(fc.stl, a10.test)
+# stlf with Box-Cox transformation has the best forecast both for the trainning data and test data set for a10 data.
+
+# h02 Data:
+h02.train <- subset(h02, end = length(h02)-36)
+h02.test <- subset(h02, start = length(h02)-35)
+fc.ets <- forecast(ets(h02.train), h=12)
+accuracy(fc.ets, h02.test)
+
+snaive_h02_train <- snaive(h02.train,  h = 12)
+accuracy(snaive_h02_train, h02.test)
+
+fc.stl <- stlf(h02.train, lambda = BoxCox.lambda(h02.train), s.window = 5, h=12, robust = TRUE)
+accuracy(fc.stl, h02.test)
+# ETS model has the best forecast both for the trainning data and test data set for h02 data.
+
+# usmelec Data:
+usmelec.train <- subset(usmelec, end = length(usmelec)-36)
+usmelec.test <- subset(usmelec, start = length(usmelec)-35)
+fc.ets <- forecast(ets(usmelec.train), h=12)
+accuracy(fc.ets, usmelec.test)
+
+snaive_usmelec_train <- snaive(usmelec.train,  h = 12)
+accuracy(snaive_usmelec_train, usmelec.test)
+
+fc.stl <- stlf(usmelec.train, lambda = BoxCox.lambda(usmelec.train), s.window = 5, h=12, robust = TRUE)
+accuracy(fc.stl, usmelec.test)
+# stlf with Box-Cox transformation has the best forecast both for the trainning data, but ETS model is best fit for test data set for usmelec data.
+
+
+# Question 14:
+force(bicoal)
+force(chicken)
+force(usdeaths)
+force(lynx)
+force(ibmclose)
+force(eggs)
+
+f.ets <- function(x, h){
+  forecast(ets(x), h = h)
+}
+e1 <- tsCV(bicoal, f.ets, h=12)
+e2 <- tsCV(chicken, f.ets, h=12)
+e3 <- tsCV(dole, f.ets, h=12)
+e4 <- tsCV(usdeaths, f.ets, h=12)
+e5 <- tsCV(lynx, f.ets, h=12)
+e6 <- tsCV(ibmclose, f.ets, h=12)
+e7 <- tsCV(eggs, f.ets, h=12)
+mean(e1^2, na.rm=TRUE)
+mean(e2^2, na.rm=TRUE)
+mean(e3^2, na.rm=TRUE)
+mean(e4^2, na.rm=TRUE)
+mean(e5^2, na.rm=TRUE)
+mean(e6^2, na.rm=TRUE)
+mean(e7^2, na.rm=TRUE)
+mean(abs(e1), na.rm=TRUE)
+mean(abs(e2), na.rm=TRUE)
+mean(abs(e3), na.rm=TRUE)
+mean(abs(e4), na.rm=TRUE)
+mean(abs(e5), na.rm=TRUE)
+mean(abs(e6), na.rm=TRUE)
+mean(abs(e7), na.rm=TRUE)
+# ETS model does not always give good forecasts. There are times when the MSE and MAE are high. 
+# Part b:
+# An example where it didn't work is lynx dataset, because ETS model has MSA and MAE of 6142882 and 1715.346.
+autoplot(lynx)
+# The reasons could be presence of anomalies/level shifts/time trends.
+
+
+# Question 15:
+# ETS(M,A,M) is multiplicative Holt-Winters' method with multiplicative errors, which is the same as Holt-Winters’ multiplicative method.
+# Show an example with data from last question:
+
+visit.ets <- ets(visitor.train, model = "MAM")
+ets.fc <- forecast(visit.ets, h=3)
+visit.hw <- hw(visitor.train, seasonal = "multiplicative")
+hw.fc <- forecast(visit.ets, h=3)
+ets.fc
+hw.fc
+# As we can see from the points estimates, the two methods are the same. 
+
+
+# Question 16: Please see attachment on Canvas. 
+
+# Question 17: Please see attachment on Canvas. 
+
+
+
+# Chapter 8:
+
+# Question 1:
+# Part a: The defference in ACF plots hapeens because when the horizon of the dataset increases, the residual variance decreases. 
+# To confirm if they are white noise, we need to look at the actual plots of the data to see if there are any trend or seansaonlity. Also, Ljung-Box test is helpful too.
+
+# Part b: For different numbers of data, we use different critical values. For data with smaller number of samples, the ACF bars are taller than the data with larger number of samples. 
+# The 95% significance level has critival value of 1.95/(N)^1/2, so as dataset increases, the dash line gets lower. 
+
+
+# Question 2: 
+force(ibmclose)
+head(ibmclose)
+# Plot data:
+autoplot(ibmclose)
+# The plot shows there are obvious trend and changing levels, so the series is not stationary.
+acf(ibmclose)
+# For each time lag, ACF values are large and positive and does not decrease to 0. So it's not stationary.
+pacf(ibmclose)
+# There is a huge spike in the time lag 1, so the series is not stationary and needs to be differenced. 
+
+
+# Question 3: Box-Cox transformation and differencing:
+force(usnetelec)
+force(usgdp)
+force(mcopper)
+force(enplanements)
+force(visitors)
+
+# 1. usnetelec Data:
+ggtsdisplay(usnetelec)
+# The series plot shows that the series has a positive trend and no seasonality. ACF plots shows that the series is not stationary since the ACF does not decrease to 0 at each time lag.  
+# So, the series needs one difference:
+Box.test(diff(usnetelec), type = "Ljung-Box")
+# The p-value is 0.36 suggesting that it is stationary. 
+
+# 2. usgdp Data:
+ggtsdisplay(usgdp)
+# The series plot shows that the series has a positive trend and no seasonality. ACF plots shows that the series is not stationary since the ACF does not decrease to 0 at each time lag.  
+# So first differencing is applied:
+Box.test(diff(usgdp), type = "Ljung-Box")
+# The p-value is close to 0, so the series is not a random amount and it is correlated with values of previous days.
+ndiffs(usgdp)
+# Second differencing is required:
+ggtsdisplay(diff(diff(usgdp)))
+usgdp %>% diff()%>% diff() %>% ur.kpss() %>% summary()
+# Test statistics is very small, so second differencing is enough. 
+
+# 3. mcopper Data:
+ggtsdisplay(mcopper)
+# The series plot shows that the series has a positive trend and big changing levels. ACF plots shows that the series is not stationary since the ACF does not decrease to 0 at each time lag.  
+Box.test(mcopper)
+# The p-value is close to 0, so the series is not a random amount and it is correlated with values of previous days.
+ndiffs(mcopper)
+# One differencing is required:
+ggtsdisplay(diff(mcopper))
+mcopper %>% diff() %>% ur.kpss() %>% summary()
+# Test statistics is  small, so first differencing is enough. 
+
+# 4. enplanements Data:
+ggtsdisplay(enplanements)
+# The series plot shows that the series has a positive trend, big changing levels and seasonality. ACF plots shows that the series is not stationary since the ACF does not decrease to 0 at each time lag.  
+Box.test(enplanements)
+# The p-value is close to 0, so the series is not a random amount and it is correlated with values of previous days.
+ndiffs(enplanements)
+# One differencing is required:
+ggtsdisplay(diff(enplanements))
+enplanements %>% diff() %>% ur.kpss() %>% summary()
+# Test statistics is  small, so first differencing is enough. 
+
+# 5. visitors Data:
+ggtsdisplay(visitors)
+# The series plot shows that the series has a positive trend, big changing levels and seasonality. 
+# ACF plots shows that the series is not stationary since the ACF does not decrease to 0 at each time lag. 
+# Also variance in visitor numbers increases with time, so it needs Box-Cox transformation.
+lambda_visitors <- BoxCox.lambda(visitors)
+autoplot(diff(BoxCox(visitors, lambda_visitors)))
+ndiffs(visitors)
+# One differencing is required:
+ggtsdisplay(diff(BoxCox(visitors, lambda_visitors)))
+visitors %>% BoxCox(lambda_visitors) %>% diff() %>% ur.kpss() %>% summary()
+# Test statistics is small, so first differencing with Box-Cox transformation is enough. 
+
+
+# Question 4: Backshift notation on enplanements Data:
+# (1-B)y_t
+
+
+# Question 5: 
+ggtsdisplay(myts)
+# The series plot shows that the series has a positive trend, big changing levels and seasonality. 
+# ACF plots shows that the series is not stationary since the ACF does not decrease to 0 at each time lag. 
+# Also variance in retail numbers increases with time, so it needs Box-Cox transformation.
+lambda_myts <- BoxCox.lambda(myts)
+autoplot(diff(BoxCox(visitors, lambda_myts)))
+ndiffs(myts)
+# One differencing is required:
+ggtsdisplay(diff(BoxCox(myts, lambda_myts)))
+# The series after differencing still has seasonality, so second differencing required:
+myts.2 <- myts %>% BoxCox(lambda_myts)%>% diff(1) %>% diff(12) 
+ggtsdisplay(myts.2)
+myts %>% BoxCox(lambda_myts)%>% diff(1) %>% diff(12) %>% ur.kpss() %>% summary()
+# The residual plot looks like white noise. Test statistic is small, so second differencing with Box-Cox transformation is enough. 
+
+
+# Question 6: 
+# Part a: Generate data:
+y1 <- ts(numeric(100)) 
+e1 <- rnorm(100)
+for(i in 2:100)
+  y1[i] <- 0.6*y1[i-1] + e1[i]
+
+# Part b: Plot series:
+autoplot(y1)
+# When phi is 0.6, the series looks like white noise.
+y2 <- ts(numeric(100)) 
+e2 <- rnorm(100)
+for(i in 2:100)
+  y2[i] <- 0.8*y2[i-1] + e2[i]
+autoplot(y2)
+# When increase phi, the series has increased variance in y values, and large changes in levels.
+y3 <- ts(numeric(100)) 
+e3 <- rnorm(100)
+for(i in 2:100)
+  y3[i] <- 0.8*y3[i-1] + e3[i]
+autoplot(y3)
+# When decrease phi, the seasonality becomes more clear.
+
+# Part c: Generate data from MA(1) model:
+ma1data <- function(theta1){
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100){
+    y[i] <- theta1*e[i-1] + e[i]
+  }
+  return(y)
+}
+
+ma1data(0.6)
+
+# Part d: Plot data:
+autoplot(ma1data(0.6))
+# When increase phi, the series has increased variance in y values, and large changes in levels. When decrease phi, the seasonality becomes more clear.
+
+# Part e: Generate data:
+armadata <- ts(numeric(50))
+e <- rnorm(50)
+for(i in 2:50){
+  armadata[i] <- 0.6*armadata[i-1] + 0.6*e[i-1] + e[i]
+}
+
+# Part f: Generate data:
+ardata <- ts(numeric(50))
+e <- rnorm(50)
+for(i in 3:50){
+  ardata[i] <- -0.8*ardata[i-1] + 0.3*ardata[i-2] + e[i]
+}
+# Part g: plot two models:
+autoplot(armadata)
+autoplot(ardata)
+# The second plot shows seasonality while the first one looks like white noise. So armadata is stationary while ardata is not.
+
+
+# Question 7:
+force(wmurders)
+head(wmurders)
+# Part a: Select model:
+ggtsdisplay(wmurders)
+# The series is not stationary because it has changing levels and ACF does not decrease to 0 at each time lag. PACF has spike at lag 1.
+ggtsdisplay(diff(wmurders))
+wmurders %>% diff() %>% ur.kpss() %>% summary()
+ndiffs(wmurders)
+# Need 2 differencing
+wmurders %>% diff()%>% diff() %>% ur.kpss() %>% summary()
+w2 <- wmurders %>% diff()%>% diff()
+ggtsdisplay(w2)
+# Second differencing makes the series stationary, so d=2.
+# Looking at ACF and PACF graphs, they are bothing decaying exponentially.
+# p: PACF has spike at lag=1, so ARIMA(1,2,2). 
+
+# Part b: inclusion of a constant in a non-stationary ARIMA model is equivalent to inducing a polynomial trend of order in the forecast function. 
+# When d >0, we don't need to include a constant. 
+
+# Part c: Backshit notation:
+# ARIMA(1,2,2): (1-phi_1B)(1-B)^2y_t = c+1+theta1B
+
+# Part d: Fit model and check residuals:
+my.fit1 <- Arima(wmurders, order=c(1,2,2))
+summary(my.fit1)
+checkresiduals(my.fit1)
+# The model produces good residuals: looks like white noise and ACF has no value outside dash line, and residual has normal distributions.
+# It is a satisfactory model.
+
+# Part e: Forecast:
+my.fc1 <- forecast(my.fit1, h=3)
+my.fc1
+
+# Part f: Plot forecasts:
+autoplot(my.fc1)
+
+# Part g: Compare to auto.arima:
+auto.fit <- auto.arima(wmurders)
+auto.fc <- forecast(auto.fit, h=3)
+autoplot(auto.fc)
+summary(auto.fc)
+checkresiduals(auto.fit)
+# The AICc from auto.arima is -6.39, while ARIMA(1,2,2) has -5.92. The two models are similar but auto.arima has a better model.
+
+
+# Question 8: 
+force(austa)
+head(austa)
+# Part a: Auto-arima:
+aus.auto <- auto.arima(austa)
+checkresiduals(aus.auto)
+aus.fc <- forecast(aus.auto, h=10)
+autoplot(aus.fc)
+
+# Part b: ARIMA(0,1,1):
+aus.011 <- Arima(austa, order = c(0,1,1))
+autoplot(forecast(aus.011, h=10))
+aus.010 <- Arima(austa, order = c(0,1,0))
+autoplot(forecast(aus.010, h=10))
+
+# Part c: ARIMA(2,1,3):
+aus.213 <- Arima(austa, order = c(2,1,3),include.drift = TRUE)
+autoplot(forecast(aus.213, h=10))
+aus.210 <- Arima(austa, order = c(2,1,3), include.constant  = FALSE, method = "ML")
+autoplot(forecast(aus.210, h=10))
+
+# Part d: ARIMA(0,0,1):
+aus.001 <- Arima(austa, order = c(0,0,1), include.constant  = TRUE)
+autoplot(forecast(aus.213, h=10))
+aus.000 <- Arima(austa, order = c(0,0,0), include.constant  = TRUE)
+autoplot(forecast(aus.210, h=10))
+
+# Part e: ARIMA(0,2,1):
+aus.021 <- Arima(austa, order = c(0,2,1), include.constant  = FALSE)
+autoplot(forecast(aus.021, h=10))
+
+
+# Question 9: 
+force(usgdp)
+head(usgdp)
+# Part a: Plot data and check variance:
+autoplot(usgdp)
+# No need for Box-Cox transformation since the series has constant variance of GDP.
+
+# Part b: Auto-arima:
+gdp.auto <- auto.arima(usgdp)
+summary(gdp.auto)
+autoplot(forecast(gdp.auto, h=24))
+# The auto-selected model is ARIMA(2,2,2).
+
+# Part c: Try other models:
+# ARIMA(1,2,2)
+gdp.122 <- Arima(usgdp, order = c(1,2,2))
+autoplot(forecast(gdp.122, h=24))
+summary(gdp.122)
+# ARIMA(2,2,1)
+gdp.122 <- Arima(usgdp, order = c(1,2,2))
+autoplot(forecast(gdp.122, h=24))
+summary(gdp.122)
+
+# Part d: Best model:
+# Auto.arima provides the best model since AICc is the lowest. 
+checkresiduals(gdp.auto)
+
+# Part e: Forecast:
+autoplot(forecast(gdp.auto, h=24))
+# Yes, the forecast looks reasonable since they also follow the positive trend.
+
+# Part f: Compare with ETS:
+gdp.ets <- ets(usgdp)
+autoplot(forecast(gdp.ets, h=24))
+# ETS model forecasts cover larger possible areas of gdp values, which is better than Arima model.
+
+
+# Question 10: 
+force(austourists)
+head(austourists)
+# Part a: Plot data and describe:
+autoplot(austourists)
+# The series has positive trend and very clear seasonality.There is a little increase in variance of tourists numbers as time goes.
+
+# Part b: ACF:
+acf(austourists)
+# ACF is decreasing very slowly, and the series is not stationary as the ACF does not decrease to 0 at each time lag.
+
+# Part c: PACF:
+pacf(austourists)
+# The last huge spike is at time lag 2. 
+
+# Part d: Seasonally adjusted Arima(0,4,0):
+autoplot(diff(austourists, lag=4, differences=1))
+ausvisit <- diff(austourists, lag=4, differences=1)
+acf(ausvisit)
+# Decrease fast and last spike is at lag 1. 
+pacf(ausvisit)
+# Decrease fast and last spike is at lag 1. 
+# Thus, I would use ARIMA(1,1,1). 
+
+# Part e: Auto-arima:
+ausvisit.auto <- auto.arima(austourists)
+summary(ausvisit.auto)
+# AICc = 293.65.
+# Auto-arima selected ARIMA(1,0,0)(1,1,0)[4] with drift. 
+# Change parameters:
+ausvisit.111 <- Arima(austourists, order = c(1, 1, 1))
+summary(ausvisit.111)
+# AICc = 478.76. So, auto-arima provides better model since its AICc is lower.
+
+# Part f: Backshift notation:(1−B4)Yt=BY(t−1)+et.
+
+
+# Question 11: 
+force(usmelec)
+head(usmelec)
+# Part a: 12 Month moving average:
+elec.ts <- ts(usmelec, frequency = 12, start = c(1973,1), end = c(2013,6))
+elec.ma <- ma(usmelec, order=12)
+autoplot(elec.ma)
+# The series has positive trend and no seasonality. But it has some sudden changes.
+
+# Part b: 
+elec.bc <- BoxCox(usmelec, BoxCox.lambda(usmelec))
+#there is little sign of change in variance of the data. So no need for transformation.
+
+# Part c: Stationarity:
+ggtsdisplay(elec.bc)
+# Definitely needs differencing, ACF do not decrease and positive trend.
+ndiffs(elec.bc)
+elec.bc %>% diff() %>% ur.kpss() %>% summary()
+# One differencing is enough, as test statistic is low at KPSS test.
+
+# Part d: Possible models:
+# One differencing: d=1;
+# Possible models can be ARIMA(1,0,2),(0,1,1):
+# ARIMA(1,0,2):
+elec.102 <- Arima(elec.bc, order = c(1,0,2))
+summary(elec.102)
+# ARIMA(01,1,1):
+elec.011 <- Arima(elec.bc, order = c(0,1,1))
+summary(elec.011)
+# ARIMA(1,0,2) is better as it has lower AICc. 
+
+# Part e: Residuals:
+checkresiduals(elec.102)
+checkresiduals(elec.011)
+# Both of the models are not so good considering the residual plots and ACF plots. 
+# Use auto-arima:
+elec.auto <- auto.arima(elec.bc)
+checkresiduals(elec.auto)
+
+# Part f: Forecast:
+elec.fc <- forecast(elec.auto, h=15*12)
+autoplot(elec.fc)
+# Import data from the EIA:
+electricity <- read.csv("~/Desktop/US Elec New.csv")
+elecnew <- electricity$Electricity
+elecnewts <- ts(elecnew, frequency = 12, start = c(2013,7))
+accuracy(elec.fc, elecnewts)
+# Plot forecast and actual data togather:
+autoplot(elec.ts, series = "Original data") +
+  autolayer(elec.fc, PI=TRUE, series = "Forecasts")+
+  autolayer(elecnewts, series = "New data") 
+  ggtitle("Forecast from ARIMA(0,1,2)(0,1,1)[12] with real data")
+
+
+
+# Question 12: 
+force(mcopper)
+head(mcopper)
+# Part a: plot data:
+autoplot(mcopper)
+# There are positive trend, seasonality and huge increase in the series. Also, increase in y values as time increases.
+# So, need differening and Box-Cox transformation.
+mcopper.bc <- BoxCox(mcopper, BoxCox.lambda(mcopper))
+
+# Part b: Auto-arima:
+mcopper.auto <- auto.arima(mcopper.bc)
+summary(mcopper.auto)
+# Auto-selected ARIMA(0,1,1).
+
+# Part c: Othe models:
+# ARIMA(0,1,0):
+copper.010 <- Arima(mcopper.bc, order = c(0,1,0))
+# ARIMA(1,1,1):
+copper.111 <- Arima(mcopper.bc, order = c(1,1,1))
+
+# Part d: Compare models:
+summary(copper.010)
+summary(copper.111)
+# Comparing three models' AICc, I find the auto.arima selected the best model ARIMA(0,1,1).
+checkresiduals(mcopper.auto)
+# Residuals are not correlated because ACF are within dashed lines and residual plots look like white noise, and distribution is normal.
+
+# Part e: Forecast:
+copper.fc <- forecast(mcopper.auto, h=24)
+autoplot(copper.fc)
+# Yes, the forecast looks reasonable but the range is too wide.
+
+# Part f: Compare to ETS model:
+copper.ets <- ets(mcopper.bc)
+summary(copper.ets)
+summary(mcopper.auto)
+# Comparing the AICc, the auto-arima model is better. 
+
+
+# Question 13: 
+force(auscafe)
+head(auscafe)
+# Part a: Data transformation:
+autoplot(auscafe)
+# The series has increasing variance with time, so need Box-Cox transformation.
+cafe.bc <- BoxCox(auscafe, BoxCox.lambda(auscafe))
+
+# Part b: Stationarity:
+# The series has a positive trend and strong seasonality, so need differencing.
+ndiffs(cafe.bc)
+cafe.bc %>% diff() %>% ur.kpss() %>% summary()
+autoplot(diff(cafe.bc))
+ggtsdisplay(diff(cafe.bc))
+# still has strong seasonality, need seasonal differening:
+autoplot(diff(cafe.bc),12)
+# still has strong seasonality, need doubly differening:
+autoplot(diff(diff(cafe.bc,12),1))
+# Looks like white noise, use test to confirm:
+cafe.2d <-diff(diff(cafe.bc,12),1)
+ggtsdisplay(cafe.2d)
+cafe.2d %>% ur.kpss() %>% summary()
+ndiffs(cafe.2d)
+# Test shows we don't need to do differencing anymore. 
+
+# Part c: Try some models:
+# Arima(2,1,1) with lag 12 and drift:
+cafe.211 <- Arima(cafe.bc, order = c(2,1,1), include.drift = TRUE )
+summary(cafe.211)  
+# AIC is -1201.88.
+
+# Arima(1,0,1) with lag 12 and drift:
+cafe.101 <- Arima(cafe.bc, order = c(1,0,1), include.drift = TRUE )
+summary(cafe.101)  
+# AIC=-1189.7. So Arima(1,0,1) is better model.
+
+# Part d: Residuals:
+checkresiduals(cafe.101)
+checkresiduals(cafe.211)
+# The residual plots do not look good, since it shows seasonality.
+# ACFs are larger than critical values.
+
+# Part e: Forecast:
+cafe.auto <- auto.arima(cafe.bc)
+cafe.fc <- forecast(cafe.auto, h=24)
+autoplot(cafe.fc)
+
+# Part f: ETS:
+cafe.ets <- ets(cafe.bc)
+cafe.fc1 <- forecast(cafe.ets, h=24)
+autoplot(cafe.fc1)
+# ETS and Arima models have similar forecasts, while ETS has slightly larger prediction intervals.
+
+
+# Question 14:
+cafe.stlf <- stlf(cafe.bc, method = "arima")
+cafe.fc2 <- forecast(cafe.stlf, h=24)
+autoplot(cafe.fc2)
+# Again, they have similar results, where STLF method has a larger PI than auto-arima model.
+
+
+# Question 15:
+# Part a:
+autoplot(myts)
+# Increasing variance in retail with time, so Box-Cox transformation.
+myts.bc <- BoxCox(myts, BoxCox.lambda(myts))
+# Also, positive trend and strong seasonality, so need differencing.
+ndiffs(myts.bc)
+myts.bc %>% diff() %>% ur.kpss() %>% summary()
+autoplot(diff(myts.bc))
+ggtsdisplay(diff(myts.bc))
+nsdiffs(myts.bc)
+# Need seasonal differencing:
+myts.2d <-diff(diff(myts.bc,12),1)
+ggtsdisplay(myts.2d)
+myts.2d %>% ur.kpss() %>% summary()
+ndiffs(myts.2d)
+# First differencing and seasonal differencing are enough to make retail series stationary.
+
+myts.auto <- auto.arima(myts.bc)
+summary(myts.auto)
+# So, ARIMA(1,1,2) with lag12 is needed.
+
+# Part b: Forecast:
+myts.fc <- forecast(myts.auto, h=24)
+summary(myts.fc)
+# RMSE is 9.107 from Holt-Winters’ multiplicative method for forecast to 2010.
+# But RMSE is only 0.09 in auto-arima model, so huge improvement.
+
+# Part c: Compare to real data:
+# Import data:
+myts.new <- read_excel("~/Desktop/8501011.xls", skip=1, sheet= 2)
+myts.test <- ts(retail[,"A3349873A"],frequency=12, start=c(1982,4))
+# Plot forecast:
+autoplot(myts, series = "Original data") +
+  autolayer(myts.fc, PI=TRUE, series = "Forecasts")+
+  autolayer(myts.tes, series = "New data") 
+ggtitle("Forecast from ARIMA(1,1,2) with real data")
+
+
+# Question 16:
+force(sheep)
+head(sheep)
+# Part a: plot data:
+autoplot(sheep)
+# Part b:  The model is Arima(3,1,0) model. 
+
+# Part c: ACF and PACF:
+acf(sheep)
+pacf(sheep)
+acf(diff(sheep))
+pacf(diff(sheep))
+# Without differencing, the data has residual whose ACF values do not decrease. 
+# Now, the PACF shows that the spike at lag 3 is significant, so model is Arima(3,1,0).
+
+# Part d: Forecast:
+sheep.1940 = 1797 + 0.42*(1797 - 1791) -0.20*(1791 - 1627) - 0.30*(1627 - 1665)
+sheep.1941 = sheep.1940 + 0.42*(sheep.1940 - 1797) -0.20*(1797 - 1791) - 0.30*(1791 - 1627)
+sheep.1942 = sheep.1941 + 0.42*(sheep.1941 - sheep.1940) -0.20*(sheep.1940 - 1797) - 0.30*(1797 - 1791)
+
+# Part e: Arima(3,1,0) forecast:
+sheep.310 <- Arima(sheep, order = c(3,1,0))
+sheep.fc <- forecast(sheep.310, h=5)
+sheep.fc
+# Book's forecasts: 1648 1665 1627 1791 1797.
+# My forecasts: 1777.996, 1718.869, 1695.985, 1704.067, 1730.084.
+# Compared to book's foreasts, my forecasts overestimate the values.
+
+
+# Question 17:
+force(bicoal)
+head(bicoal)
+# Part a: plot data:
+autoplot(bicoal)
+# Hufe chaning levels and seasonality.
+
+# Part b: ARIMA model is Arima(4,0,0)
+
+# Part c: ACF and PACF:
+acf(bicoal)
+pacf(bicoal)
+# ACF does not decrease exponentially
+# PACF decrease exponentially, and last spike is at time lag 4. So p=4.
+
+# Part d: Forecast:
+c = 162.00
+phi1 = 0.83 
+phi2 = -0.34
+phi3 = 0.55
+phi4 = -0.38
+bicoal.1969 <- c + phi1*545 + phi2*552 + phi3*534 + phi4*512
+bicoal.1970 <- c + phi1*bicoal.1969 + phi2*545 + phi3*552 + phi4*534
+bicoal.1971 <- c + phi1*bicoal.1970 + phi2*bicoal.1969 + phi3*545 + phi4*552
+bicoal.1969
+bicoal.1970
+bicoal.1971
+
+# Part e: Fit and forecast:
+sheep.400 <- Arima(sheep, order = c(4,0,0))
+sheep.fc <- forecast(sheep.400, h=5)
+sheep.fc
+# The model gives forecasts: 1786.030, 1741.284, 1729.032, 1742.393, 1769.939.
+# The forecasts are larger than the ones calculated by the formulas. 
+
+
+# Question 18:
+# Part a: 
+library(rdatamarket)
+
+# Part b. Select a time series 
+oil.NA <- ts(dmseries("http://data.is/1qk5Uvf")[, "Total.North.America"], start=1965, frequency=1)
+
+str(oil.NA)
+head(oil.NA)
+
+# Part c. Plot graphs of the data:
+autoplot(oil.NA)
+ndiffs(oil.NA)
+ggtsdisplay(diff(oil.NA))
+
+# ARIMA(1, 1, 0) model will fit well to the data because of seasonality and PACF has spike at lag 1.
+
+# Part d. Do residual diagnostic checking of your ARIMA model. Are the residuals white noise?
+oil.NA_arima.1.1.0 <- Arima(
+  oil.NA, order = c(1, 1, 0)
+)
+checkresiduals(oil.NA_arima.1.1.0)
+# The residuals are like white noise.
+
+# Part e.  forecast the next four years.
+fc_oil.NA_arima.1.1.0 <- forecast(
+  oil.NA_arima.1.1.0, h = 4
+)
+autoplot(fc_oil.NA_arima.1.1.0)
+# The forecast values of oil production are increasing. But the increase speed is damping.
+
+# Part f. Now try to identify an appropriate ETS model.
+oil.NA_ets <- ets(oil.NA)
+oil.NA_ets
+# chosen model is ETS(A, A, N).
+
+# Part g. Do residual diagnostic checking of your ETS model. Are the residuals white noise?
+checkresiduals(oil.NA_ets)
+# The residuals are like white noise.
+
+# Part h. Use your chosen ETS model to forecast the next four years.
+fc_oil.NA_ets <- forecast(
+  oil.NA_ets, h = 4
+)
+autoplot(fc_oil.NA_ets)
+# The forecast values of oil production are increasing. And the increase speed doesn't almost change.
+
+# Part i. Which of the two models do you prefer?
+# ARIMA model is bette because oil production amounts may not increase too much for more than 10 years in a row.
+
